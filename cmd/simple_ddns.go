@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4"
 	"gopkg.in/ini.v1"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 )
 
 type Response struct {
@@ -35,13 +37,21 @@ func main() {
 	wd, _ := os.Getwd()
 	configPath := path.Join(wd, "ddns.ini")
 	log.Printf("configPath %s", configPath)
-	load, err := ini.Load(configPath)
-	if err != nil {
-		panic(err)
-	}
+
 	conf := new(DDNS)
-	if err = load.MapTo(&conf); err != nil {
-		panic(err)
+	if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
+		conf.Type = os.Getenv("DDNS_TYPE")
+		conf.APIToken = os.Getenv("DDNS_API_TOKEN")
+		conf.DomainID, _ = strconv.Atoi(os.Getenv("DDNS_DOMAIN_ID"))
+		conf.DomainRecordID, _ = strconv.Atoi(os.Getenv("DDNS_DOMAIN_RECORD_ID"))
+	} else {
+		c := new(ini.File)
+		if c, err = ini.Load(configPath); err != nil {
+			panic(err)
+		}
+		if err = c.MapTo(&conf); err != nil {
+			panic(err)
+		}
 	}
 
 	url := fmt.Sprintf("https://api.linode.com/v4/domains/%d/records/%d", conf.DomainID, conf.DomainRecordID)
